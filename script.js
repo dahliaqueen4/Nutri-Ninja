@@ -2,6 +2,26 @@ let calorieGoal = 3000;
 let currentCalories = 0;
 let meals = [];
 let days = []; // 🔥 Added to track daily data
+let history = []; // 🔥 store all past data
+
+
+
+// 🔥 Check if a new month has started
+function checkForNewMonth() {
+    if (days.length === 0) return; // No data yet, nothing to reset
+
+    const lastDay = days[days.length - 1];
+    const lastDate = new Date(lastDay.date);
+    const currentDate = new Date();
+
+    // Check if the month has changed
+    if (lastDate.getMonth() !== currentDate.getMonth() || lastDate.getFullYear() !== currentDate.getFullYear()) {
+        history.push(...days); // 🔥 Add current month's data to history
+        days = []; // 🔥 Reset days for the new month
+        saveData(); // 🔥 Save the updated data
+    }
+}
+
 
 // 🔥 Save data to localStorage
 function saveData() {
@@ -29,13 +49,15 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
 });
 
+
 // Download data as a JSON file
 function downloadData() {
     const data = {
         calorieGoal,
         currentCalories,
         meals,
-        days // 🔥 Include days data in the download
+        days,
+        history // 🔥 Include history in the download
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -122,30 +144,38 @@ function navigateToPage(page) {
 
         const button = document.createElement('button');
         button.textContent = 'Log Meal';
-        button.onclick = () => {
-            const meal = mealInput.value;
-            const calories = parseInt(calorieInput.value);
-            const proteins = parseInt(proteinInput.value) || 0;
-            const carbs = parseInt(carbInput.value) || 0;
-            const fats = parseInt(fatInput.value) || 0;
+        // Inside the log meal button's onclick function
+button.onclick = () => {
+    const meal = mealInput.value;
+    const calories = parseInt(calorieInput.value);
+    const proteins = parseInt(proteinInput.value) || 0;
+    const carbs = parseInt(carbInput.value) || 0;
+    const fats = parseInt(fatInput.value) || 0;
 
-            if (!validateInput(meal, 'text') || !validateInput(calories, 'number')) {
-                return;
-            }
+    if (!validateInput(meal, 'text') || !validateInput(calories, 'number')) {
+        return;
+    }
 
-            if (meal && calories > 0) {
-                meals.push({ meal, calories, proteins, carbs, fats });
-                currentCalories += calories;
-                days[days.length - 1].meals.push({ meal, calories, proteins, carbs, fats }); // 🔥 Add meal to current day
-                days[days.length - 1].totalCalories += calories; // 🔥 Update total calories for the day
-                saveData();
-                alert(`${meal} logged with ${calories} calories.`);
+    if (meal && calories > 0) {
+        checkForNewMonth(); // 🔥 Check if a new month has started
 
-                if (currentCalories >= calorieGoal) {
-                    launchConfetti();
-                }
-            }
-        };
+        meals.push({ meal, calories, proteins, carbs, fats });
+        currentCalories += calories;
+        if (days.length === 0) {
+            days.push({ date: new Date().toLocaleDateString(), meals: [], totalCalories: 0 });
+        }
+        days[days.length - 1].meals.push({ meal, calories, proteins, carbs, fats });
+        days[days.length - 1].totalCalories += calories;
+        saveData();
+        alert(`${meal} logged with ${calories} calories.`);
+
+        if (currentCalories >= calorieGoal) {
+            launchConfetti();
+        }
+    }
+};
+      
+      
 
         contentDiv.appendChild(mealInput);
         contentDiv.appendChild(calorieInput);
@@ -296,69 +326,69 @@ function navigateToPage(page) {
     }
 }
 
- function renderCalorieTrendChart() {
-            const ctx = document.createElement('canvas');
-            ctx.id = 'calorieTrendChart';
-            ctx.style.maxWidth = '1000px';
-            ctx.style.height = '400px';
-            ctx.style.margin = '20px auto';
+ // 🔥 Render calorie trend chart
+function renderCalorieTrendChart() {
+    const ctx = document.createElement('canvas');
+    ctx.id = 'calorieTrendChart';
+    ctx.style.maxWidth = '1000px';
+    ctx.style.height = '400px';
+    ctx.style.margin = '20px auto';
 
-            const report = document.getElementById('content');
-            report.appendChild(ctx);
+    const report = document.getElementById('content');
+    report.appendChild(ctx);
 
-            const labels = days.map((day, index) => `Day ${index + 1} (${day.date})`); // 🔥 Include date in labels
-            const data = days.map(day => day.totalCalories); // 🔥 Use total calories for each day
-            const goalMet = data.map(calories => calories >= calorieGoal);
+    const labels = days.map((day, index) => `Day ${index + 1} (${day.date})`); // 🔥 Include date in labels
+    const data = days.map(day => day.totalCalories); // 🔥 Use total calories for each day
+    const goalMet = data.map(calories => calories >= calorieGoal);
 
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Calorie Intake',
-                        data: data,
-                        borderColor: '#36A2EB',
-                        fill: false
-                    }]
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Calorie Intake',
+                data: data,
+                borderColor: '#36A2EB',
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Calories'
+                    }
                 },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Calories'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Days'
-                            }
-                        }
-                    },
-                    plugins: {
-                        annotation: {
-                            annotations: goalMet.map((met, index) => ({
-                                type: 'label', // 🔥 Use 'label' instead of 'point'
-                                xValue: index, // 🔥 X-axis position (day index)
-                                yValue: data[index], // 🔥 Y-axis position (calories for the day)
-                                content: met ? '✔' : '', // 🔥 Display checkmark if goal is met
-                                font: {
-                                    size: 20, // 🔥 Adjust font size
-                                    weight: 'bold'
-                                },
-                                color: '#4caf50', // 🔥 Green color for the checkmark
-                                backgroundColor: 'transparent',
-                                borderWidth: 0,
-                                position: 'top' // 🔥 Position the checkmark above the point
-                            }))
-                        }
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Days'
                     }
                 }
-            });
+            },
+            plugins: {
+                annotation: {
+                    annotations: goalMet.map((met, index) => ({
+                        type: 'label', // 🔥 Use 'label' instead of 'point'
+                        xValue: index, // 🔥 X-axis position (day index)
+                        yValue: data[index], // 🔥 Y-axis position (calories for the day)
+                        content: met ? '✔️' : '', // 🔥 Display checkmark if goal is met
+                        font: {
+                            size: 20, // 🔥 Adjust font size
+                            weight: 'bold'
+                        },
+                        color: '#4caf50', // 🔥 Green color for the checkmark
+                        backgroundColor: 'transparent',
+                        borderWidth: 0,
+                        position: 'top' // 🔥 Position the checkmark above the point
+                    }))
+                }
+            }
         }
-
+    });
+}
 
 
 // Launch confetti
